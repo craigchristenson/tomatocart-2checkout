@@ -27,7 +27,11 @@
       $this->_status = (MODULE_PAYMENT_PM2CHECKOUT_STATUS == '1') ? true : false;
       $this->_sort_order = MODULE_PAYMENT_PM2CHECKOUT_SORT_ORDER;
 
-      $this->form_action_url = 'https://www.2checkout.com/checkout/spurchase';
+      if (MODULE_PAYMENT_PM2CHECKOUT_DIRECT == 1) {
+        $this->form_action_url = 'https://www.2checkout.com/checkout/purchase" id="tco_form" target="tco_lightbox_iframe" onclick="showTcoIframe()';
+      } else {
+        $this->form_action_url = 'https://www.2checkout.com/checkout/purchase';
+      }
 
       if ($this->_status === true) {
         if ((int)MODULE_PAYMENT_PM2CHECKOUT_ORDER_STATUS_ID > 0) {
@@ -61,6 +65,7 @@
     }
 
     function selection() {
+
       return array('id' => $this->_code,
                    'module' => $this->_method_title);
     }
@@ -112,6 +117,10 @@
                                osc_draw_hidden_field('demo', $demo) .
                                osc_draw_hidden_field('customer_id', $osC_Customer->getID()) .
                                osc_draw_hidden_field('cart_order_id', $this->_order_id);
+                               if (MODULE_PAYMENT_PM2CHECKOUT_DIRECT == 1) {
+                                 $process_button_string.= osc_draw_hidden_field('tco_use_inline', '1');
+                               }
+
 
       $products = array();
       $products = $osC_ShoppingCart->getProducts();
