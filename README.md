@@ -20,8 +20,8 @@ Integrate Tomato Cart with 2Checkout
 
 1. Sign in to your 2Checkout account.
 2. Click the **Account** tab and **Site Management** subcategory.
-3. Under **Direct Return** select **Header Redirect**.
-4. Set the **Approved URL** to http://www.yoursite.com/checkout.php?callback&module=pm2checkout (Replace http://www.yoursite.com with the actual URL to your store.)
+3. Under **Direct Return** select **Given Links back to my Website**.
+4. Set the **Approved URL** to http://www.yoursite.com/checkout.php?process (Replace http://www.yoursite.com with the actual URL to your store.)
 5. Enter your **Secret Word**. (Must be the same value entered in your Tomato Cart admin.)
 6. Click **Save Changes**.
 
