@@ -97,7 +97,7 @@
 
       $process_button_string = osc_draw_hidden_field('sid', MODULE_PAYMENT_PM2CHECKOUT_SELLER_ID) .
                                osc_draw_hidden_field('total', $osC_Currencies->formatRaw($osC_ShoppingCart->getTotal(), $currency)) .
-                               osc_draw_hidden_field('x_receipt_link_url', osc_href_link(FILENAME_CHECKOUT, 'callback&module=' . $this->_code, 'SSL', null, null, true)) .
+                               osc_draw_hidden_field('x_receipt_link_url', osc_href_link(FILENAME_CHECKOUT, 'process', 'SSL', null, null, true)) .
                                osc_draw_hidden_field('first_name', $osC_ShoppingCart->getBillingAddress('firstname')) .
                                osc_draw_hidden_field('last_name', $osC_ShoppingCart->getBillingAddress('lastname')) .
                                osc_draw_hidden_field('street_address', $osC_ShoppingCart->getBillingAddress('street_address')) .
@@ -116,7 +116,8 @@
                                osc_draw_hidden_field('id_type', '1') .
                                osc_draw_hidden_field('demo', $demo) .
                                osc_draw_hidden_field('customer_id', $osC_Customer->getID()) .
-                               osc_draw_hidden_field('cart_order_id', $this->_order_id);
+                               osc_draw_hidden_field('cart_order_id', $this->_order_id) . 
+                               osc_draw_hidden_field('purchase_step', 'payment-method');
                                if (MODULE_PAYMENT_PM2CHECKOUT_DIRECT == 1) {
                                  $process_button_string.= osc_draw_hidden_field('tco_use_inline', '1');
                                }
@@ -139,49 +140,44 @@
     }
 
     function process() {
-      global $osC_Customer, $osC_ShoppingCart;
-
-      if (isset($_REQUEST['cart_order_id']) && is_numeric($_REQUEST['cart_order_id']) && ($_REQUEST['sid'] == MODULE_PAYMENT_PM2CHECKOUT_SELLER_ID)) {
-          unset($_SESSION['prepOrderID']);
+      global $osC_Database, $osC_Currencies, $osC_ShoppingCart, $messageStack, $osC_Language;
+      
+      if (MODULE_PAYMENT_PM2CHECKOUT_DEMO_MODE == 1) {
+        $order_number = 1;
+      } else {
+        $order_number = $_REQUEST['order_number'];
       }
-    }
 
-    function callback() {
-        global $osC_Database, $osC_Currencies, $osC_ShoppingCart;
-        if(MODULE_PAYMENT_PM2CHECKOUT_DEMO_MODE == 1)
-            $order_number = 1;
-        else
-            $order_number = $_REQUEST['order_number'];
+      $check_hash = strtoupper(md5(MODULE_PAYMENT_PM2CHECKOUT_SECRET_WORD . MODULE_PAYMENT_PM2CHECKOUT_SELLER_ID . $order_number . $osC_Currencies->formatRaw($osC_ShoppingCart->getTotal())));
 
-        $check_hash = strtoupper(md5(MODULE_PAYMENT_PM2CHECKOUT_SECRET_WORD . MODULE_PAYMENT_PM2CHECKOUT_SELLER_ID . $order_number . $osC_Currencies->formatRaw($osC_ShoppingCart->getTotal())));
+      if ($check_hash == $_REQUEST['key']) {
+        if (isset($_REQUEST['cart_order_id']) && is_numeric($_REQUEST['cart_order_id']) && ($_REQUEST['cart_order_id'] > 0)) {
+          $Qcheck = $osC_Database->query('select orders_status, currency, currency_value from :table_orders where orders_id = :orders_id and customers_id = :customers_id');
+          $Qcheck->bindTable(':table_orders', TABLE_ORDERS);
+          $Qcheck->bindInt(':orders_id', $_REQUEST['cart_order_id']);
+          $Qcheck->bindInt(':customers_id', $_REQUEST['customer_id']);
+          $Qcheck->execute();
 
-        if ($check_hash == $_REQUEST['key']) {
-            if (isset($_REQUEST['cart_order_id']) && is_numeric($_REQUEST['cart_order_id']) && ($_REQUEST['cart_order_id'] > 0)) {
-                $Qcheck = $osC_Database->query('select orders_status, currency, currency_value from :table_orders where orders_id = :orders_id and customers_id = :customers_id');
-                $Qcheck->bindTable(':table_orders', TABLE_ORDERS);
-                $Qcheck->bindInt(':orders_id', $_REQUEST['cart_order_id']);
-                $Qcheck->bindInt(':customers_id', $_REQUEST['customer_id']);
-                $Qcheck->execute();
+          if ($Qcheck->numberOfRows() > 0) {
+            $Qtotal = $osC_Database->query('select value from :table_orders_total where orders_id = :orders_id and class = "total" limit 1');
+            $Qtotal->bindTable(':table_orders_total', TABLE_ORDERS_TOTAL);
+            $Qtotal->bindInt(':orders_id', $_REQUEST['cart_order_id']);
+            $Qtotal->execute();
 
-                if ($Qcheck->numberOfRows() > 0) {
-                    $Qtotal = $osC_Database->query('select value from :table_orders_total where orders_id = :orders_id and class = "total" limit 1');
-                    $Qtotal->bindTable(':table_orders_total', TABLE_ORDERS_TOTAL);
-                    $Qtotal->bindInt(':orders_id', $_POST['cart_order_id']);
-                    $Qtotal->execute();
+            $comments = '2Checkout Order Successful [' . $_REQUEST['order_number'] . '; ' . $osC_Currencies->format($_REQUEST['total']) . ')]';
 
-                    $comment = $_REQUEST['order_number'] . '; ' . $osC_Currencies->format($_REQUEST['total']) . ')';
-
-                    $comments = '2Checkout Order Successful [' . $comment . ']';
-
-                    osC_Order::process($_REQUEST['cart_order_id'], $this->order_status, $comments);
-                    $osC_ShoppingCart->reset(true);
-                    osc_redirect(osc_href_link(FILENAME_CHECKOUT, 'success', 'SSL'));
-                }
-            }
-        } else {
-            echo "MD5 HASH MISMATCH, PLEASE CONTACT THE SELLER";
-            exit;
+            osC_Order::process($_REQUEST['cart_order_id'], $this->order_status, $comments);
+          }
         }
+      } else {
+        $comments =  "MD5 HASH MISMATCH, PLEASE CONTACT THE SELLER";
+        
+        $messageStack->add_session('checkout', $comments);
+        
+        osC_Order::insertOrderStatusHistory($_REQUEST['cart_order_id'], $this->order_status, $comments);
+        
+        osc_redirect(osc_href_link(FILENAME_CHECKOUT, 'checkout&view=paymentInformationForm', 'SSL'));
+      }
     }
   }
 ?>
